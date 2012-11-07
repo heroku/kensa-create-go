@@ -259,6 +259,3 @@ func main() {
 	err := http.ListenAndServe(":"+port, handler)
 	Check(err)
 }
-
-// todo: extract
-// todo: constant-time compare
