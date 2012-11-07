@@ -1,11 +1,6 @@
 ## kensa-create-go
 
-This repo is a Go template app for Heroku [kensa](http://github.com/heroku/kensa)
-tool
-
-```console
-$ kensa create --template go
-```
+A add-on template app in Go, for use with [kensa](http://github.com/heroku/kensa).
 
 ### Usage
 
