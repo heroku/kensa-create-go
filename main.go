@@ -168,14 +168,17 @@ func router() *mux.Router {
 }
 
 func main() {
+	logs := make(chan string, 10000)
+	go runLogging(logs)
+
 	herokuPassword := config("HEROKU_PASSWORD")
 	herokuAuth = func(u string, p string) bool {
 		return p == herokuPassword
 	}
-	logs := make(chan string, 10000)
-	go runLogging(logs)
+
 	handler := routerHandlerFunc(router())
 	handler = wrapLogging(handler, logs)
+
 	port := config("PORT")
 	logs <- fmt.Sprintf("serve at=start port=%s", port)
 	err := http.ListenAndServe(":"+port, handler)
