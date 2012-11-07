@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-func check(err error) {
+func Check(err error) {
 	if err != nil {
 		panic(err)
 	}
@@ -75,7 +75,7 @@ func testAuth(r *http.Request, auth Authenticator) bool {
 func denyAuth(res http.ResponseWriter) {
 	res.Header().Set("WWW-Authenticate", `Basic realm="private"`)
 	res.WriteHeader(401)
-	res.Write([]byte("401 Unauthorized\n"))
+	res.Write([]byte("{message: \"Unauthorized\"}\n"))
 }
 
 func ensureAuth(res http.ResponseWriter, req *http.Request, auth Authenticator) bool {
@@ -86,10 +86,21 @@ func ensureAuth(res http.ResponseWriter, req *http.Request, auth Authenticator) 
 	return false
 }
 
-func respondJson(resp http.ResponseWriter, data interface{}) {
-	b, err := json.Marshal(&data)
+func readJson(req *http.Request, resp http.ResponseWriter, reqD interface{}) bool {
+	err := json.NewDecoder(req.Body).Decode(reqD)
+	if err != nil {
+		resp.WriteHeader(400)
+		resp.Write([]byte("{message: \"Invalid body\"}"))
+		return false
+	}
+	return true
+}
+
+func writeJson(resp http.ResponseWriter, respD interface{}) {
+	b, err := json.Marshal(&respD)
 	if err != nil {
 		resp.WriteHeader(500)
+		resp.Write([]byte("{message: \"Internal server error\"}"))
 	} else {
 		resp.Write(b)
 	}
@@ -111,23 +122,38 @@ func notFound(res http.ResponseWriter, req *http.Request) {
 
 var herokuAuth Authenticator
 
+type createResourceReq struct {
+	HerokuId    string            `json:"heroku_id"`
+	Plan        string            `json:"plan"`
+	CallbackUrl string            `json:"callback_url"`
+	Options     map[string]string `json:"options"`
+}
 type createResourceResp struct {
 	Id      string            `json:"id"`
 	Config  map[string]string `json:"config"`
 	Message string            `json:"message"`
 }
 
-func createResource(res http.ResponseWriter, req *http.Request) {
-	if !ensureAuth(res, req, herokuAuth) {
+func createResource(resp http.ResponseWriter, req *http.Request) {
+	if !ensureAuth(resp, req, herokuAuth) {
 		return
 	}
+	reqD := &createResourceReq{}
+	if !readJson(req, resp, reqD) {
+		return
+	}
+	fmt.Println(reqD)
 	respD := &createResourceResp{
 		Id:      "1",
 		Config:  map[string]string{"KENSA_CREATE_GO_URL": "https://kensa-create-go.com/resources/1"},
 		Message: "All set up!"}
-	respondJson(res, &respD)
+	writeJson(resp, respD)
 }
 
+type updateResourceReq struct {
+	HerokuId string `json:"heroku_id"`
+	Plan     string `json:"plan"`
+}
 type updateResourceResp struct {
 	Config  map[string]string `json:"config"`
 	Message string            `json:"message"`
@@ -137,10 +163,15 @@ func updateResource(resp http.ResponseWriter, req *http.Request) {
 	if !ensureAuth(resp, req, herokuAuth) {
 		return
 	}
-	respD := updateResourceResp{
+	reqD := &updateResourceReq{}
+	if !readJson(req, resp, reqD) {
+		return
+	}
+	fmt.Println(reqD)
+	respD := &updateResourceResp{
 		Config:  map[string]string{"KENSA_CREATE_GO_URL": "https://kensa-create-go.com/resources/1"},
 		Message: "All updated!"}
-	respondJson(resp, &respD)
+	writeJson(resp, respD)
 }
 
 type destroyResourceResp struct {
@@ -153,7 +184,7 @@ func destroyResource(res http.ResponseWriter, req *http.Request) {
 	}
 	respD := &destroyResourceResp{
 		Message: "All torn down!"}
-	respondJson(res, &respD)
+	writeJson(res, &respD)
 }
 
 func router() *mux.Router {
@@ -182,7 +213,7 @@ func main() {
 	port := MustGetenv("PORT")
 	logs <- fmt.Sprintf("serve at=start port=%s", port)
 	err := http.ListenAndServe(":"+port, handler)
-	check(err)
+	Check(err)
 }
 
 // todo: extract
