@@ -161,7 +161,6 @@ func createResource(resp http.ResponseWriter, req *http.Request) {
 	if !readJson(resp, req, reqD) {
 		return
 	}
-	fmt.Println(reqD)
 	respD := &createResourceResp{
 		Id:      "1",
 		Config:  map[string]string{"KENSA_CREATE_GO_URL": "https://kensa-create-go.com/resources/1"},
@@ -186,7 +185,6 @@ func updateResource(resp http.ResponseWriter, req *http.Request) {
 	if !readJson(resp, req, reqD) {
 		return
 	}
-	fmt.Println(reqD)
 	respD := &updateResourceResp{
 		Config:  map[string]string{"KENSA_CREATE_GO_URL": "https://kensa-create-go.com/resources/1"},
 		Message: "All updated!"}
@@ -224,6 +222,7 @@ func createSession(resp http.ResponseWriter, req *http.Request) {
 	if (err != nil) || (timestampInt < timestampLimit) {
 		resp.WriteHeader(403)
 		resp.Write([]byte("{message: \"Invalid timestamp\"}"))
+		return
 	}
 	http.SetCookie(resp, &http.Cookie{
 		Name: "heroku-nav-data",
