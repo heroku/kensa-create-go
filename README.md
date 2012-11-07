@@ -11,9 +11,9 @@ $ gem install foreman
 $ kensa create my-addon --template go
 $ cd my-addon
 $ go get
+$ echo "web: my-addon" > Procfile
 $ foreman start
 
 $ cd my-addon
-$ kensa test provision
-$ tensa sso 1
+$ kensa test all
 ```
