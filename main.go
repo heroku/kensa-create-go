@@ -2,11 +2,12 @@ package main
 
 import (
 	"code.google.com/p/gorilla/mux"
-	// "encoding/base64"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -53,39 +54,37 @@ func wrapLogging(f http.HandlerFunc, logs chan string) http.HandlerFunc {
 	}
 }
 
-// type Authenticator func(string, string) bool
-// 
-// func testAuth(r *http.Request, auth Authenticator) bool {
-// 	s := strings.SplitN(r.Header.Get("Authorization"), " ", 2)
-// 	if len(s) != 2 || s[0] != "Basic" {
-// 		return false
-// 	}
-// 	b, err := base64.StdEncoding.DecodeString(s[1])
-// 	if err != nil {
-// 		return false
-// 	}
-// 	pair := strings.SplitN(string(b), ":", 2)
-// 	if len(pair) != 2 {
-// 		return false
-// 	}
-// 	return auth(pair[0], pair[1])
-// }
+type Authenticator func(string, string) bool
 
-// func requireAuth(w http.ResponseWriter, r *http.Request) {
-// 	w.Header().Set("WWW-Authenticate", `Basic realm="private"`)
-// 	w.WriteHeader(401)
-// 	w.Write([]byte("401 Unauthorized\n"))
-// }
-// 
-// func wrapAuth(h http.HandlerFunc, a Authenticator) http.HandlerFunc {
-// 	return func(w http.ResponseWriter, r *http.Request) {
-// 		if testAuth(r, a) {
-// 			h(w, r)
-// 		} else {
-// 			requireAuth(w, r)
-// 		}
-// 	}
-// }
+func testAuth(r *http.Request, auth Authenticator) bool {
+	s := strings.SplitN(r.Header.Get("Authorization"), " ", 2)
+	if len(s) != 2 || s[0] != "Basic" {
+		return false
+	}
+	b, err := base64.StdEncoding.DecodeString(s[1])
+	if err != nil {
+		return false
+	}
+	pair := strings.SplitN(string(b), ":", 2)
+	if len(pair) != 2 {
+		return false
+	}
+	return auth(pair[0], pair[1])
+}
+
+func denyAuth(res http.ResponseWriter) {
+	res.Header().Set("WWW-Authenticate", `Basic realm="private"`)
+	res.WriteHeader(401)
+	res.Write([]byte("401 Unauthorized\n"))
+}
+
+func ensureAuth(res http.ResponseWriter, req *http.Request, auth Authenticator) bool {
+	if testAuth(req, auth) {
+		return true
+	}
+	denyAuth(res)
+	return false
+}
 
 func routerHandlerFunc(router *mux.Router) http.HandlerFunc {
 	return func(res http.ResponseWriter, req *http.Request) {
@@ -101,20 +100,40 @@ func notFound(res http.ResponseWriter, req *http.Request) {
 	http.ServeFile(res, req, "public/404.html")
 }
 
-// func checkAuth(user, pass string) bool {
-// 	auth := os.Getenv("AUTH")
-// 	if auth == "" {
-// 		return true
-// 	}
-// 	return auth == strings.Join([]string{user, pass}, ":")
-// }
+var herokuAuth Authenticator
+
+type createResourceResp struct {
+	Id      string            `json:"id"`
+	Config  map[string]string `json:"config"`
+	Message string            `json:"message"`
+}
 
 func createResource(res http.ResponseWriter, req *http.Request) {
-	// if requireAuth(res, req)
-	var respD struct {
-		Id string `json:"id"`
+	if !ensureAuth(res, req, herokuAuth) {
+		return
 	}
-	respD.Id = "1"
+	respD := &createResourceResp{
+		Id:      "1",
+		Config:  map[string]string{"KENSA_CREATE_GO_URL": "https://kensa-create-go.com/resources/1"},
+		Message: "All set up!"}
+	respB, err := json.Marshal(&respD)
+	if err != nil {
+		res.WriteHeader(500)
+	} else {
+		res.Write(respB)
+	}
+}
+
+type destroyResourceResp struct {
+	Message string `json:"message"`
+}
+
+func destroyResource(res http.ResponseWriter, req *http.Request) {
+	if !ensureAuth(res, req, herokuAuth) {
+		return
+	}
+	respD := &destroyResourceResp{
+		Message: "All torn down!"}
 	respB, err := json.Marshal(&respD)
 	if err != nil {
 		res.WriteHeader(500)
@@ -127,20 +146,24 @@ func router() *mux.Router {
 	router := mux.NewRouter()
 	router.HandleFunc("/style.css", static).Methods("GET")
 	router.HandleFunc("/heroku/resources", createResource).Methods("POST")
-	// router.HandleFunc("/heroku/resources/:id", updateResource).Methods("PUT")
-	// router.HandleFunc("/heroku/resources/:id", destroyResource).Methods("DELETE")
+	// router.HandleFunc("/heroku/resources/{id}", updateResource).Methods("PUT")
+	router.HandleFunc("/heroku/resources/{id}", destroyResource).Methods("DELETE")
 	// router.HandleFunc("/sso/login", createSession).Methods("POST")
 	router.NotFoundHandler = http.HandlerFunc(notFound)
 	return router
 }
 
 func main() {
-	// initAuthenticator()
+	herokuPassword := config("HEROKU_PASSWORD")
+	herokuAuth = func(u string, p string) bool {
+		return p == herokuPassword
+	}
 	logs := make(chan string, 10000)
 	go runLogging(logs)
 	handler := routerHandlerFunc(router())
 	handler = wrapLogging(handler, logs)
-	logs <- "serve at=start"
-	err := http.ListenAndServe(":"+config("PORT"), handler)
+	port := config("PORT")
+	logs <- fmt.Sprintf("serve at=start port=%s", port)
+	err := http.ListenAndServe(":"+port, handler)
 	check(err)
 }
