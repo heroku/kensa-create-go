@@ -3,16 +3,17 @@ package main
 import (
 	"code.google.com/p/gorilla/mux"
 	// "encoding/base64"
+	"encoding/json"
 	"fmt"
-	"os"
 	"net/http"
+	"os"
 	"time"
 )
 
 func check(err error) {
-    if err != nil {
-        panic(err)
-    }
+	if err != nil {
+		panic(err)
+	}
 }
 
 func config(k string) string {
@@ -24,13 +25,13 @@ func config(k string) string {
 }
 
 type statusCapturingResponseWriter struct {
-   status int
-   http.ResponseWriter
+	status int
+	http.ResponseWriter
 }
 
-func (w *statusCapturingResponseWriter) WriteHeader(s int) {
-  w.status = s
-  w.ResponseWriter.WriteHeader(s)
+func (w statusCapturingResponseWriter) WriteHeader(s int) {
+	w.status = s
+	w.ResponseWriter.WriteHeader(s)
 }
 
 func runLogging(logs chan string) {
@@ -41,7 +42,7 @@ func runLogging(logs chan string) {
 
 func wrapLogging(f http.HandlerFunc, logs chan string) http.HandlerFunc {
 	return func(res http.ResponseWriter, req *http.Request) {
-		wres := &statusCapturingResponseWriter{-1, res}
+		wres := statusCapturingResponseWriter{-1, res}
 		start := time.Now()
 		f(wres, req)
 		method := req.Method
@@ -53,7 +54,7 @@ func wrapLogging(f http.HandlerFunc, logs chan string) http.HandlerFunc {
 }
 
 // type Authenticator func(string, string) bool
-
+// 
 // func testAuth(r *http.Request, auth Authenticator) bool {
 // 	s := strings.SplitN(r.Header.Get("Authorization"), " ", 2)
 // 	if len(s) != 2 || s[0] != "Basic" {
@@ -69,7 +70,7 @@ func wrapLogging(f http.HandlerFunc, logs chan string) http.HandlerFunc {
 // 	}
 // 	return auth(pair[0], pair[1])
 // }
-// 
+
 // func requireAuth(w http.ResponseWriter, r *http.Request) {
 // 	w.Header().Set("WWW-Authenticate", `Basic realm="private"`)
 // 	w.WriteHeader(401)
@@ -85,6 +86,12 @@ func wrapLogging(f http.HandlerFunc, logs chan string) http.HandlerFunc {
 // 		}
 // 	}
 // }
+
+func routerHandlerFunc(router *mux.Router) http.HandlerFunc {
+	return func(res http.ResponseWriter, req *http.Request) {
+		router.ServeHTTP(res, req)
+	}
+}
 
 func static(res http.ResponseWriter, req *http.Request) {
 	http.ServeFile(res, req, "public"+req.URL.Path)
@@ -102,14 +109,18 @@ func notFound(res http.ResponseWriter, req *http.Request) {
 // 	return auth == strings.Join([]string{user, pass}, ":")
 // }
 
-func routerHandlerFunc(router *mux.Router) http.HandlerFunc {
-	return func(res http.ResponseWriter, req *http.Request) {
-		router.ServeHTTP(res, req)
-	}
-}
-
 func createResource(res http.ResponseWriter, req *http.Request) {
-	
+	// if requireAuth(res, req)
+	var respD struct {
+		Id string `json:"id"`
+	}
+	respD.Id = "1"
+	respB, err := json.Marshal(&respD)
+	if err != nil {
+		res.WriteHeader(500)
+	} else {
+		res.Write(respB)
+	}
 }
 
 func router() *mux.Router {
@@ -124,7 +135,8 @@ func router() *mux.Router {
 }
 
 func main() {
-	logs := make(chan string, 10000)	
+	// initAuthenticator()
+	logs := make(chan string, 10000)
 	go runLogging(logs)
 	handler := routerHandlerFunc(router())
 	handler = wrapLogging(handler, logs)
