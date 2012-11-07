@@ -163,7 +163,7 @@ func createResource(resp http.ResponseWriter, req *http.Request) {
 	}
 	respD := &createResourceResp{
 		Id:      "1",
-		Config:  map[string]string{"KENSA_CREATE_GO_URL": "https://kensa-create-go.com/resources/1"},
+		Config:  map[string]string{"MYADDON_URL": "https://kensa-create-go.com/resources/1"},
 		Message: "All set up!"}
 	writeJson(resp, respD)
 }
@@ -186,7 +186,7 @@ func updateResource(resp http.ResponseWriter, req *http.Request) {
 		return
 	}
 	respD := &updateResourceResp{
-		Config:  map[string]string{"KENSA_CREATE_GO_URL": "https://kensa-create-go.com/resources/1"},
+		Config:  map[string]string{"MYADDON_URL": "https://kensa-create-go.com/resources/1"},
 		Message: "All updated!"}
 	writeJson(resp, respD)
 }
@@ -206,7 +206,7 @@ func destroyResource(resp http.ResponseWriter, req *http.Request) {
 
 func createSession(resp http.ResponseWriter, req *http.Request) {
 	readForm(resp, req)
-	ssoSalt := MustGetenv("HEROKU_SSO_SALT")
+	ssoSalt := MustGetenv("SSO_SALT")
 	id := req.FormValue("id")
 	timestamp := req.FormValue("timestamp")
 	token := req.FormValue("token")
