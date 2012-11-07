@@ -17,7 +17,7 @@ func check(err error) {
 	}
 }
 
-func config(k string) string {
+func MustGetenv(k string) string {
 	v := os.Getenv(k)
 	if v == "" {
 		panic("missing " + k)
@@ -171,7 +171,7 @@ func main() {
 	logs := make(chan string, 10000)
 	go runLogging(logs)
 
-	herokuPassword := config("HEROKU_PASSWORD")
+	herokuPassword := MustGetenv("HEROKU_PASSWORD")
 	herokuAuth = func(u string, p string) bool {
 		return p == herokuPassword
 	}
@@ -179,7 +179,7 @@ func main() {
 	handler := routerHandlerFunc(router())
 	handler = wrapLogging(handler, logs)
 
-	port := config("PORT")
+	port := MustGetenv("PORT")
 	logs <- fmt.Sprintf("serve at=start port=%s", port)
 	err := http.ListenAndServe(":"+port, handler)
 	check(err)
