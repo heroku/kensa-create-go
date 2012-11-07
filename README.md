@@ -1,6 +1,6 @@
 ## kensa-create-go
 
-A add-on template app in Go, for use with [kensa](http://github.com/heroku/kensa).
+An add-on template app in Go, for use with [kensa](http://github.com/heroku/kensa).
 
 ### Usage
 
