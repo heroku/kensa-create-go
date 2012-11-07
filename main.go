@@ -86,6 +86,15 @@ func ensureAuth(res http.ResponseWriter, req *http.Request, auth Authenticator) 
 	return false
 }
 
+func respondJson(resp http.ResponseWriter, data interface{}) {
+	b, err := json.Marshal(&data)
+	if err != nil {
+		resp.WriteHeader(500)
+	} else {
+		resp.Write(b)
+	}
+}
+
 func routerHandlerFunc(router *mux.Router) http.HandlerFunc {
 	return func(res http.ResponseWriter, req *http.Request) {
 		router.ServeHTTP(res, req)
@@ -116,12 +125,22 @@ func createResource(res http.ResponseWriter, req *http.Request) {
 		Id:      "1",
 		Config:  map[string]string{"KENSA_CREATE_GO_URL": "https://kensa-create-go.com/resources/1"},
 		Message: "All set up!"}
-	respB, err := json.Marshal(&respD)
-	if err != nil {
-		res.WriteHeader(500)
-	} else {
-		res.Write(respB)
+	respondJson(res, &respD)
+}
+
+type updateResourceResp struct {
+	Config  map[string]string `json:"config"`
+	Message string            `json:"message"`
+}
+
+func updateResource(resp http.ResponseWriter, req *http.Request) {
+	if !ensureAuth(resp, req, herokuAuth) {
+		return
 	}
+	respD := updateResourceResp{
+		Config:  map[string]string{"KENSA_CREATE_GO_URL": "https://kensa-create-go.com/resources/1"},
+		Message: "All updated!"}
+	respondJson(resp, &respD)
 }
 
 type destroyResourceResp struct {
@@ -134,19 +153,14 @@ func destroyResource(res http.ResponseWriter, req *http.Request) {
 	}
 	respD := &destroyResourceResp{
 		Message: "All torn down!"}
-	respB, err := json.Marshal(&respD)
-	if err != nil {
-		res.WriteHeader(500)
-	} else {
-		res.Write(respB)
-	}
+	respondJson(res, &respD)
 }
 
 func router() *mux.Router {
 	router := mux.NewRouter()
 	router.HandleFunc("/style.css", static).Methods("GET")
 	router.HandleFunc("/heroku/resources", createResource).Methods("POST")
-	// router.HandleFunc("/heroku/resources/{id}", updateResource).Methods("PUT")
+	router.HandleFunc("/heroku/resources/{id}", updateResource).Methods("PUT")
 	router.HandleFunc("/heroku/resources/{id}", destroyResource).Methods("DELETE")
 	// router.HandleFunc("/sso/login", createSession).Methods("POST")
 	router.NotFoundHandler = http.HandlerFunc(notFound)
@@ -167,3 +181,6 @@ func main() {
 	err := http.ListenAndServe(":"+port, handler)
 	check(err)
 }
+
+// todo: extract
+// todo: constant-time compare
