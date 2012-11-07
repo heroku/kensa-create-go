@@ -2,11 +2,13 @@ package main
 
 import (
 	"code.google.com/p/gorilla/mux"
+ 	"crypto/sha1"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -23,6 +25,13 @@ func MustGetenv(k string) string {
 		panic("missing " + k)
 	}
 	return v
+}
+
+func Sha1(s string) string {
+	h := sha1.New()
+	h.Write([]byte(s))
+	bs := h.Sum(nil)
+	return fmt.Sprintf("%x", bs)
 }
 
 type statusCapturingResponseWriter struct {
@@ -86,7 +95,17 @@ func ensureAuth(res http.ResponseWriter, req *http.Request, auth Authenticator) 
 	return false
 }
 
-func readJson(req *http.Request, resp http.ResponseWriter, reqD interface{}) bool {
+func readForm(resp http.ResponseWriter, req *http.Request) bool {
+	err := req.ParseForm()
+	if err != nil {
+		resp.WriteHeader(400)
+		resp.Write([]byte("{message: \"Invalid body\"}"))
+		return false
+	}
+	return true
+}
+
+func readJson(resp http.ResponseWriter, req *http.Request, reqD interface{}) bool {
 	err := json.NewDecoder(req.Body).Decode(reqD)
 	if err != nil {
 		resp.WriteHeader(400)
@@ -139,7 +158,7 @@ func createResource(resp http.ResponseWriter, req *http.Request) {
 		return
 	}
 	reqD := &createResourceReq{}
-	if !readJson(req, resp, reqD) {
+	if !readJson(resp, req, reqD) {
 		return
 	}
 	fmt.Println(reqD)
@@ -164,7 +183,7 @@ func updateResource(resp http.ResponseWriter, req *http.Request) {
 		return
 	}
 	reqD := &updateResourceReq{}
-	if !readJson(req, resp, reqD) {
+	if !readJson(resp, req, reqD) {
 		return
 	}
 	fmt.Println(reqD)
@@ -178,22 +197,48 @@ type destroyResourceResp struct {
 	Message string `json:"message"`
 }
 
-func destroyResource(res http.ResponseWriter, req *http.Request) {
-	if !ensureAuth(res, req, herokuAuth) {
+func destroyResource(resp http.ResponseWriter, req *http.Request) {
+	if !ensureAuth(resp, req, herokuAuth) {
 		return
 	}
 	respD := &destroyResourceResp{
 		Message: "All torn down!"}
-	writeJson(res, &respD)
+	writeJson(resp, &respD)
+}
+
+func createSession(resp http.ResponseWriter, req *http.Request) {
+	readForm(resp, req)
+	ssoSalt := MustGetenv("HEROKU_SSO_SALT")
+	id := req.FormValue("id")
+	timestamp := req.FormValue("timestamp")
+	token := req.FormValue("token")
+	navData := req.FormValue("nav-data")
+	hash := Sha1(id + ":" + ssoSalt + ":" + timestamp)
+	if hash != token {
+		resp.WriteHeader(403)
+		resp.Write([]byte("{message: \"Invalid token\"}"))
+		return
+	}
+	timestampLimit := int(time.Now().Unix() - (2 * 60))
+	timestampInt, err := strconv.Atoi(timestamp)
+	if (err != nil) || (timestampInt < timestampLimit) {
+		resp.WriteHeader(403)
+		resp.Write([]byte("{message: \"Invalid timestamp\"}"))
+	}
+	http.SetCookie(resp, &http.Cookie{
+		Name: "heroku-nav-data",
+		Value: navData})
+	http.Redirect(resp, req, "/", 302)
 }
 
 func router() *mux.Router {
 	router := mux.NewRouter()
+	router.HandleFunc("/", static).Methods("GET")
 	router.HandleFunc("/style.css", static).Methods("GET")
 	router.HandleFunc("/heroku/resources", createResource).Methods("POST")
 	router.HandleFunc("/heroku/resources/{id}", updateResource).Methods("PUT")
 	router.HandleFunc("/heroku/resources/{id}", destroyResource).Methods("DELETE")
-	// router.HandleFunc("/sso/login", createSession).Methods("POST")
+	router.HandleFunc("/sso/login", createSession).Methods("POST")
 	router.NotFoundHandler = http.HandlerFunc(notFound)
 	return router
 }
