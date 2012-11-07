@@ -233,7 +233,6 @@ func createSession(resp http.ResponseWriter, req *http.Request) {
 func router() *mux.Router {
 	router := mux.NewRouter()
 	router.HandleFunc("/", static).Methods("GET")
-	router.HandleFunc("/style.css", static).Methods("GET")
 	router.HandleFunc("/heroku/resources", createResource).Methods("POST")
 	router.HandleFunc("/heroku/resources/{id}", updateResource).Methods("PUT")
 	router.HandleFunc("/heroku/resources/{id}", destroyResource).Methods("DELETE")
