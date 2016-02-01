@@ -1,3 +1,7 @@
+# [DEPRECATED]
+
+This tool is deprecated. Please follow [this guide](https://devcenter.heroku.com/articles/building-a-heroku-add-on) when building a Heroku add-on.
+
 ## kensa-create-go
 
 An add-on template app in Go, for use with [kensa](http://github.com/heroku/kensa).
